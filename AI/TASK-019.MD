@@ -1,4 +1,9 @@
 NOTE FOR CLAUDE CODE: Do not make assumptions, mock data, or placeholders. Always implement production-ready code.
+GLOBAL UPGRADE REQUIREMENTS
+- Upgrade all NuGet packages to the latest stable versions compatible with .NET 8.
+- Migrate all projects to .NET 8 (net8.0) and update code for any breaking changes.
+- Update the Discord API library to the latest stable version.
+- Replace prefix commands with Discord slash commands and update parsing, modules, and documentation accordingly.
 
 # TASK-019 - Security Controls and Permissions
 
@@ -41,3 +46,4 @@ public static async Task<bool> EnsureGuildAdminAsync(IDiscordContext context,
 - Admin-only commands are inaccessible to non-admin users.
 - Rate limits prevent command abuse without blocking legitimate usage.
 - Tokens are never stored in source-controlled files.
+
