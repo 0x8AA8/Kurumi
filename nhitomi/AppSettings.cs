@@ -1,47 +1,57 @@
+using Discord;
 using Discord.WebSocket;
 
-namespace nhitomi
+namespace nhitomi;
+
+public sealed class AppSettings
 {
-    public sealed class AppSettings
+    public DiscordSettings Discord { get; set; } = new();
+    public HttpSettings Http { get; set; } = new();
+    public FeedSettings Feed { get; set; } = new();
+
+    public sealed class DiscordSettings
     {
-        public DiscordSettings Discord { get; set; } = new DiscordSettings();
+        public string? Token { get; set; }
+        public string? BotInvite { get; set; }
+        public ulong? TestGuildId { get; set; }
 
-        public sealed class DiscordSettings : DiscordSocketConfig
+        public StatusSettings Status { get; set; } = new();
+        public GuildSettings Guild { get; set; } = new();
+
+        public DiscordSocketConfig GetSocketConfig() => new()
         {
-            public string Prefix { get; set; }
-            public string Token { get; set; }
-            public string BotInvite { get; set; }
+            GatewayIntents = GatewayIntents.Guilds |
+                             GatewayIntents.GuildMessages |
+                             GatewayIntents.GuildMessageReactions |
+                             GatewayIntents.DirectMessages |
+                             GatewayIntents.DirectMessageReactions |
+                             GatewayIntents.MessageContent,
+            AlwaysDownloadUsers = false,
+            MessageCacheSize = 100,
+            LogLevel = LogSeverity.Info
+        };
 
-            public StatusSettings Status { get; set; } = new StatusSettings();
-
-            public sealed class StatusSettings
-            {
-                public double UpdateInterval { get; set; }
-                public string[] Games { get; set; }
-            }
-
-            public GuildSettings Guild { get; set; } = new GuildSettings();
-
-            public sealed class GuildSettings
-            {
-                public ulong GuildId { get; set; }
-                public string GuildInvite { get; set; }
-                public ulong ErrorChannelId { get; set; }
-            }
+        public sealed class StatusSettings
+        {
+            public double UpdateInterval { get; set; } = 60;
+            public string[] Games { get; set; } = [];
         }
 
-        public HttpSettings Http { get; set; } = new HttpSettings();
-
-        public sealed class HttpSettings
+        public sealed class GuildSettings
         {
-            public bool EnableProxy { get; set; }
+            public ulong GuildId { get; set; }
+            public string? GuildInvite { get; set; }
+            public ulong ErrorChannelId { get; set; }
         }
+    }
 
-        public FeedSettings Feed { get; set; } = new FeedSettings();
+    public sealed class HttpSettings
+    {
+        public bool EnableProxy { get; set; }
+    }
 
-        public sealed class FeedSettings
-        {
-            public bool Enabled { get; set; }
-        }
+    public sealed class FeedSettings
+    {
+        public bool Enabled { get; set; }
     }
 }

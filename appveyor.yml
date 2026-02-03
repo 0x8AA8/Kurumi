@@ -1,8 +1,10 @@
 clone_depth: 1
 version: '{branch}-{build}'
-image: Visual Studio 2017
+image: Visual Studio 2022
 test: off
 install:
   - cmd: git submodule update --init --recursive
 build_script:
-  - cmd: dotnet build
+  - cmd: dotnet build --configuration Release
+test_script:
+  - cmd: dotnet test --configuration Release --no-build
