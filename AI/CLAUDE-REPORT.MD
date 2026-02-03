@@ -1148,10 +1148,9 @@ Renovate bot configured for automated updates:
 
 ### Security
 
-1. **Secrets Management** - Use Azure Key Vault or similar
-2. **Rate Limiting** - Implement per-user rate limits
-3. **Audit Logging** - Log admin actions
-4. **Permission System** - Formalize permission checks
+1. **Rate Limiting** - Implement per-user rate limits
+2. **Audit Logging** - Log admin actions
+3. **Permission System** - Formalize permission checks
 
 ### Operations
 
