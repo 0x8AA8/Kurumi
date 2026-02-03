@@ -67,12 +67,14 @@ namespace nhitomi.Discord
 
                 // send to logger if no error channel or we are debugging
                 else
-                    _logger.LogWarning(e, "Exception while handling message {0}.", context.Message?.Id);
+                    _logger.LogWarning(e, "Exception while handling message {MessageId} in channel {ChannelId}",
+                        context.Message?.Id, context.Channel?.Id);
             }
             catch (Exception reportingException)
             {
                 // ignore reporting errors
-                _logger.LogWarning(reportingException, "Failed to report exception: {0}", e);
+                _logger.LogWarning(reportingException, "Failed to report exception {ExceptionType}: {ExceptionMessage}",
+                    e.GetType().Name, e.Message);
             }
         }
 

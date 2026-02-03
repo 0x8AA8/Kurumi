@@ -4,11 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using nhitomi.Core;
 using nhitomi.Discord;
 using nhitomi.Interactivity;
 using Newtonsoft.Json;
+using Polly;
 
 namespace nhitomi;
 
@@ -68,8 +70,25 @@ public static class Startup
         services.AddHostedInjectableService<FeedChannelUpdateService>();
         services.AddHostedInjectableService<GuildWelcomeMessageService>();
 
-        // Other services
-        services.AddHttpClient();
+        // HTTP client with resilience policies
+        services.AddHttpClient(nameof(HttpClientWrapper))
+            .ConfigureHttpClient(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(settings.Http.TimeoutSeconds);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("nhitomi/3.4");
+            })
+            .AddResilienceHandler("nhitomi-http", builder =>
+            {
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = settings.Http.RetryCount,
+                    Delay = TimeSpan.FromMilliseconds(settings.Http.RetryDelayMilliseconds),
+                    BackoffType = DelayBackoffType.Exponential
+                });
+
+                builder.AddTimeout(TimeSpan.FromSeconds(settings.Http.TimeoutSeconds));
+            });
+
         services.AddTransient<IHttpClient, HttpClientWrapper>();
         services.AddTransient(_ => JsonSerializer.Create(new nhitomiSerializerSettings()));
         services.AddHostedInjectableService<ForcedGarbageCollector>();

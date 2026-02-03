@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using nhitomi.Core;
 using nhitomi.Discord;
 
@@ -13,6 +15,14 @@ public static class Program
         var builder = Host.CreateApplicationBuilder(args);
 
         Startup.Configure(builder.Configuration, builder.Environment);
+
+        // Validate configuration before proceeding
+        var settings = builder.Configuration.Get<AppSettings>() ?? new AppSettings();
+        if (!builder.Environment.IsDevelopment())
+        {
+            settings.ValidateAndThrow();
+        }
+
         Startup.ConfigureServices(builder.Services, builder.Configuration);
 
         using var host = builder.Build();
