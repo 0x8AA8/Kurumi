@@ -89,6 +89,40 @@ docker build -t nhitomi .
 docker run -e Discord__Token=YOUR_TOKEN nhitomi
 ```
 
+## Project Structure
+
+```text
+Kurumi/
+├── nhitomi/                    # Main Discord bot application
+│   ├── Discord/                # Discord client, event handlers, services
+│   ├── Modules/                # Slash command modules (DoujinModule, CollectionModule, etc.)
+│   ├── Interactivity/          # Interactive message system
+│   ├── Globalization/          # Localization resources
+│   ├── Startup.cs              # Dependency injection configuration
+│   └── Program.cs              # Application entry point
+├── nhitomi.Core/               # Core library (models, clients, database)
+│   ├── Clients/                # Source site clients (nhentai, hitomi)
+│   └── *.cs                    # Models, database context, utilities
+├── nhitomi.Core.UnitTests/     # Unit tests
+├── AI/                         # Claude Code analysis and task files
+├── Dockerfile                  # Docker build configuration
+└── nhitomi.sln                 # Visual Studio solution file
+```
+
+### Build Outputs
+
+Build artifacts are generated in `bin/` and `obj/` directories within each project folder. These are excluded from version control via `.gitignore`.
+
+## Architecture
+
+The bot follows a layered architecture:
+
+1. **Discord Layer** (`nhitomi/Discord/`): Handles Discord events, message/reaction handlers
+2. **Command Layer** (`nhitomi/Modules/`): Slash command modules using Discord.Net Interactions
+3. **Interactive Layer** (`nhitomi/Interactivity/`): Manages interactive embed messages with reactions
+4. **Core Layer** (`nhitomi.Core/`): Business logic, source clients, data models
+5. **Data Layer** (`nhitomi.Core/`): Entity Framework Core with MySQL/SQLite
+
 ## License
 
 Copyright (c) 2018-2019 chiya.dev

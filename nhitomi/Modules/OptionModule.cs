@@ -75,7 +75,7 @@ public class OptionModule : InteractionModuleBase<SocketInteractionContext>
         _settingsCache[Context.Channel] = guild;
 
         var localization = Localization.GetLocalization(language);
-        await FollowupAsync($"Language changed to {localization.Name} ({language}).");
+        await FollowupAsync($"Language changed to {localization.Culture.EnglishName} ({language}).");
     }
 }
 

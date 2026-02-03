@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Discord;
 using Discord.Net;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,13 +13,13 @@ namespace nhitomi.Discord
     public class DiscordErrorReporter
     {
         readonly AppSettings _settings;
-        readonly IHostingEnvironment _environment;
+        readonly IHostEnvironment _environment;
         readonly DiscordService _discord;
         readonly InteractiveManager _interactiveManager;
         readonly ILogger<DiscordErrorReporter> _logger;
 
         public DiscordErrorReporter(IOptions<AppSettings> options,
-                                    IHostingEnvironment environment,
+                                    IHostEnvironment environment,
                                     DiscordService discord,
                                     InteractiveManager interactiveManager,
                                     ILogger<DiscordErrorReporter> logger)
@@ -38,7 +39,7 @@ namespace nhitomi.Discord
             try
             {
                 // handle permission exceptions differently
-                if (e is HttpException httpException && httpException.DiscordCode == 50013) // 500013 missing perms
+                if (e is HttpException httpException && httpException.DiscordCode == DiscordErrorCode.MissingPermissions)
                 {
                     await ReportMissingPermissionAsync(context, cancellationToken);
                     return;
@@ -52,7 +53,7 @@ namespace nhitomi.Discord
                         cancellationToken);
 
                 // send detailed error message to the guild error channel
-                var errorChannel = _discord.GetGuild(_settings.Discord.Guild.GuildId)
+                var errorChannel = _discord.Client.GetGuild(_settings.Discord.Guild.GuildId)
                                           ?.GetTextChannel(_settings.Discord.Guild.ErrorChannelId);
 
                 if (errorChannel != null && !_environment.IsDevelopment())
