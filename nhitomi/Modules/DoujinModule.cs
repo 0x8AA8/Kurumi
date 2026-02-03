@@ -7,6 +7,7 @@ using nhitomi.Interactivity;
 namespace nhitomi.Modules;
 
 [Group("doujin", "Commands for browsing and interacting with doujinshi")]
+[RateLimit]
 public class DoujinModule : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly IDatabase _database;

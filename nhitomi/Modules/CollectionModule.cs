@@ -7,6 +7,7 @@ using nhitomi.Interactivity;
 namespace nhitomi.Modules;
 
 [Group("collection", "Manage your doujin collections")]
+[RateLimit]
 public class CollectionModule : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly IDatabase _database;

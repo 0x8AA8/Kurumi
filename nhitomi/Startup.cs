@@ -36,6 +36,9 @@ public static class Startup
             .AddConsole()
             .AddDebug());
 
+        // Caching
+        services.AddMemoryCache();
+
         // Database
         var connectionString = configuration.GetConnectionString("nhitomi");
         services.AddScoped<IDatabase>(s => s.GetRequiredService<nhitomiDbContext>());
@@ -60,6 +63,7 @@ public static class Startup
         services.AddSingleton<InteractiveManager>();
         services.AddSingleton<GuildSettingsCache>();
         services.AddSingleton<DiscordErrorReporter>();
+        services.AddSingleton<RateLimitService>();
 
         // Hosted services
         services.AddHostedInjectableService<MessageHandlerService>();
@@ -69,6 +73,7 @@ public static class Startup
         services.AddHostedInjectableService<GuildSettingsSyncService>();
         services.AddHostedInjectableService<FeedChannelUpdateService>();
         services.AddHostedInjectableService<GuildWelcomeMessageService>();
+        services.AddHostedInjectableService<HealthCheckService>();
 
         // HTTP client with resilience policies
         services.AddHttpClient(nameof(HttpClientWrapper))

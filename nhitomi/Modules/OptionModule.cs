@@ -8,6 +8,8 @@ using nhitomi.Globalization;
 namespace nhitomi.Modules;
 
 [Group("settings", "Configure bot settings for this server")]
+[RateLimit]
+[RequireGuildAdmin]
 public class OptionModule : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly IDatabase _db;
@@ -21,23 +23,6 @@ public class OptionModule : InteractionModuleBase<SocketInteractionContext>
         _settingsCache = settingsCache;
     }
 
-    private static async Task<bool> EnsureGuildAdminAsync(SocketInteractionContext context)
-    {
-        if (context.User is not IGuildUser user)
-        {
-            await context.Interaction.RespondAsync("This command can only be used in a server.", ephemeral: true);
-            return false;
-        }
-
-        if (!user.GuildPermissions.ManageGuild)
-        {
-            await context.Interaction.RespondAsync("You need the 'Manage Server' permission to use this command.", ephemeral: true);
-            return false;
-        }
-
-        return true;
-    }
-
     [SlashCommand("language", "Set the bot language for this server")]
     public async Task LanguageAsync(
         [Summary("language", "Language code to set")]
@@ -46,9 +31,6 @@ public class OptionModule : InteractionModuleBase<SocketInteractionContext>
         [Choice("Korean", "ko")]
         string language)
     {
-        if (!await EnsureGuildAdminAsync(Context))
-            return;
-
         await DeferAsync();
 
         if (!Localization.IsAvailable(language))
@@ -80,6 +62,8 @@ public class OptionModule : InteractionModuleBase<SocketInteractionContext>
 }
 
 [Group("feed", "Configure feed channels for automatic doujin updates")]
+[RateLimit]
+[RequireGuildAdmin]
 public class FeedModule : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly AppSettings _settings;
@@ -105,28 +89,11 @@ public class FeedModule : InteractionModuleBase<SocketInteractionContext>
         return false;
     }
 
-    private static async Task<bool> EnsureGuildAdminAsync(SocketInteractionContext context)
-    {
-        if (context.User is not IGuildUser user)
-        {
-            await context.Interaction.RespondAsync("This command can only be used in a server.", ephemeral: true);
-            return false;
-        }
-
-        if (!user.GuildPermissions.ManageGuild)
-        {
-            await context.Interaction.RespondAsync("You need the 'Manage Server' permission to use this command.", ephemeral: true);
-            return false;
-        }
-
-        return true;
-    }
-
     [SlashCommand("add-tag", "Add a tag to the feed channel whitelist")]
     public async Task AddTagAsync(
         [Summary("tag", "Tag to add to the whitelist")] string tag)
     {
-        if (!await EnsureFeedEnabled() || !await EnsureGuildAdminAsync(Context))
+        if (!await EnsureFeedEnabled())
             return;
 
         await DeferAsync();
@@ -181,7 +148,7 @@ public class FeedModule : InteractionModuleBase<SocketInteractionContext>
     public async Task RemoveTagAsync(
         [Summary("tag", "Tag to remove from the whitelist")] string tag)
     {
-        if (!await EnsureFeedEnabled() || !await EnsureGuildAdminAsync(Context))
+        if (!await EnsureFeedEnabled())
             return;
 
         await DeferAsync();
@@ -227,7 +194,7 @@ public class FeedModule : InteractionModuleBase<SocketInteractionContext>
         [Choice("All (match all tags)", "all")]
         string mode)
     {
-        if (!await EnsureFeedEnabled() || !await EnsureGuildAdminAsync(Context))
+        if (!await EnsureFeedEnabled())
             return;
 
         await DeferAsync();

@@ -8,6 +8,7 @@ using nhitomi.Interactivity;
 
 namespace nhitomi.Modules;
 
+[RateLimit]
 public class HelpModule : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly InteractiveManager _interactive;
