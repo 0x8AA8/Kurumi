@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(set:*)",
+      "Bash(set ASPNETCORE_ENVIRONMENT=Development)",
+      "Bash(DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development dotnet run:*)",
+      "Bash(ping:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(tasklist:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl:*)"
     ]
   }
 }

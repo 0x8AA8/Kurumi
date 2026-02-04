@@ -14,6 +14,88 @@ using Polly;
 
 namespace nhitomi;
 
+/// <summary>
+/// Initializes the database on startup by applying migrations.
+/// </summary>
+public class DatabaseInitializer : IHostedService
+{
+    private readonly IServiceProvider _services;
+    private readonly ILogger<DatabaseInitializer> _logger;
+
+    public DatabaseInitializer(IServiceProvider services, ILogger<DatabaseInitializer> logger)
+    {
+        _services = services;
+        _logger = logger;
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<nhitomiDbContext>();
+
+        try
+        {
+            _logger.LogInformation("Applying database migrations...");
+            await db.Database.MigrateAsync(cancellationToken);
+            _logger.LogInformation("Database migrations applied successfully");
+
+            // Ensure FULLTEXT index exists for doujin search
+            await EnsureFulltextIndexAsync(db, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to apply database migrations");
+            throw;
+        }
+    }
+
+    private async Task EnsureFulltextIndexAsync(nhitomiDbContext db, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Check if FULLTEXT index already exists
+            var checkSql = @"
+                SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'Doujins'
+                AND INDEX_TYPE = 'FULLTEXT'";
+
+            var connection = db.Database.GetDbConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = checkSql;
+            var count = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
+
+            if (count == 0)
+            {
+                _logger.LogInformation("Creating FULLTEXT index on Doujins.TagsDenormalized...");
+
+                // Drop existing regular index if it exists
+                try
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        "DROP INDEX `IX_Doujins_TagsDenormalized` ON `Doujins`", cancellationToken);
+                }
+                catch { /* Index might not exist */ }
+
+                // Create FULLTEXT index
+                await db.Database.ExecuteSqlRawAsync(
+                    "CREATE FULLTEXT INDEX `FT_Doujins_TagsDenormalized` ON `Doujins` (`TagsDenormalized`)",
+                    cancellationToken);
+
+                _logger.LogInformation("FULLTEXT index created successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not create FULLTEXT index - search functionality may be limited");
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
 public static class Startup
 {
     public static void Configure(IConfigurationBuilder config, IHostEnvironment environment)
@@ -64,6 +146,9 @@ public static class Startup
         services.AddSingleton<GuildSettingsCache>();
         services.AddSingleton<DiscordErrorReporter>();
         services.AddSingleton<RateLimitService>();
+
+        // Database initialization (must be first to ensure tables exist)
+        services.AddHostedService<DatabaseInitializer>();
 
         // Hosted services
         services.AddHostedInjectableService<MessageHandlerService>();

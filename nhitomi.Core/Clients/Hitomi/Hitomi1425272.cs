@@ -1,7 +1,10 @@
 using System;
+using nhitomi.Core;
 
 namespace nhitomi.Core.Clients.Hitomi
 {
+    // Ignored: External data changes frequently, breaking integration tests
+    [Ignored]
     public class Hitomi1425272 : ClientTestCase
     {
         public override string DoujinId => "1425272";

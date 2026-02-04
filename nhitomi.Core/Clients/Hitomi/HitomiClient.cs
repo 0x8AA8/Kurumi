@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using HtmlAgilityPack;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
@@ -14,33 +13,19 @@ namespace nhitomi.Core.Clients.Hitomi
 {
     public static class Hitomi
     {
+        // API domain changed from hitomi.la to gold-usergeneratedcontent.net
+        private const string ApiDomain = "gold-usergeneratedcontent.net";
+
         public static string Gallery(int id) => $"https://hitomi.la/galleries/{id}.html";
 
-        public static string GalleryInfo(int id,
-                                         char? server = null) => $"https://{server}tn.hitomi.la/galleries/{id}.js";
+        public static string GalleryInfo(int id) => $"https://ltn.{ApiDomain}/galleries/{id}.js";
 
         static char GetCdn(int id) => (char) ('a' + (id % 10 == 1 ? 0 : id) % 2);
 
         public static string Image(int id,
                                    string name) => $"https://{GetCdn(id)}a.hitomi.la/galleries/{id}/{name}";
 
-        public static class XPath
-        {
-            const string _gallery = "//div[contains(@class,'gallery')]";
-            const string _galleryInfo = "//div[contains(@class,'gallery-info')]";
-
-            public const string Name = _gallery + "//a[contains(@href,'/reader/')]";
-            public const string Artists = _gallery + "//a[contains(@href,'/artist/')]";
-            public const string Groups = _gallery + "//a[contains(@href,'/group/')]";
-            public const string Type = _gallery + "//a[contains(@href,'/type/')]";
-            public const string Language = _galleryInfo + "//tr[3]//a";
-            public const string Series = _gallery + "//a[contains(@href,'/series/')]";
-            public const string Tags = _gallery + "//a[contains(@href,'/tag/')]";
-            public const string Characters = _gallery + "//a[contains(@href,'/character/')]";
-            public const string Date = _gallery + "//span[contains(@class,'date')]";
-        }
-
-        public const string NozomiIndex = "https://ltn.hitomi.la/index-all.nozomi";
+        public const string NozomiIndex = $"https://ltn.{ApiDomain}/index-all.nozomi";
     }
 
     public sealed class HitomiClient : IDoujinClient
@@ -65,10 +50,6 @@ namespace nhitomi.Core.Clients.Hitomi
         static readonly Regex _bracketsRegex = new Regex(@"\([^)]*\)|\[[^\]]*\]",
                                                          RegexOptions.Compiled | RegexOptions.Singleline);
 
-        // regex to match index-language-page
-        static readonly Regex _languageHrefRegex = new Regex(@"index-(?<language>\w+)-\d+",
-                                                             RegexOptions.Compiled | RegexOptions.Singleline);
-
         public static string GetGalleryUrl(Doujin doujin) => $"https://hitomi.la/galleries/{doujin.SourceId}.html";
 
         public async Task<DoujinInfo> GetAsync(string id,
@@ -77,81 +58,7 @@ namespace nhitomi.Core.Clients.Hitomi
             if (!int.TryParse(id, out var intId))
                 return null;
 
-            HtmlNode root;
-
-            // load html page
-            using (var response = await _http.SendAsync(
-                new HttpRequestMessage
-                {
-                    Method     = HttpMethod.Get,
-                    RequestUri = new Uri(Hitomi.Gallery(intId))
-                },
-                cancellationToken))
-            {
-                if (!response.IsSuccessStatusCode)
-                    return null;
-
-                using (var reader = new StringReader(await response.Content.ReadAsStringAsync()))
-                {
-                    var doc = new HtmlDocument();
-                    doc.Load(reader);
-
-                    root = doc.DocumentNode;
-                }
-            }
-
-            // filter out anime
-            var type = Sanitize(root.SelectSingleNode(Hitomi.XPath.Type));
-
-            if (type != null && type.Equals("anime", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogInformation($"Skipping '{id}' because it is of type 'anime'.");
-                return null;
-            }
-
-            var prettyName = Sanitize(root.SelectSingleNode(Hitomi.XPath.Name));
-
-            // replace stuff in brackets with nothing
-            prettyName = _bracketsRegex.Replace(prettyName, "");
-
-            var originalName = prettyName;
-
-            // parse names with two parts
-            var pipeIndex = prettyName.IndexOf('|');
-
-            if (pipeIndex != -1)
-            {
-                prettyName   = prettyName.Substring(0, pipeIndex).Trim();
-                originalName = originalName.Substring(pipeIndex + 1).Trim();
-            }
-
-            // parse language
-            var languageHref = root.SelectSingleNode(Hitomi.XPath.Language)?.Attributes["href"]?.Value;
-
-            var language = languageHref == null
-                ? null
-                : _languageHrefRegex.Match(languageHref).Groups["language"].Value;
-
-            var doujin = new DoujinInfo
-            {
-                PrettyName   = prettyName,
-                OriginalName = originalName,
-
-                UploadTime = DateTime.Parse(Sanitize(root.SelectSingleNode(Hitomi.XPath.Date))).ToUniversalTime(),
-
-                Source   = this,
-                SourceId = id,
-
-                Artist     = Sanitize(root.SelectSingleNode(Hitomi.XPath.Artists))?.ToLowerInvariant(),
-                Group      = Sanitize(root.SelectSingleNode(Hitomi.XPath.Groups))?.ToLowerInvariant(),
-                Language   = language?.ToLowerInvariant(),
-                Parody     = ConvertSeries(Sanitize(root.SelectSingleNode(Hitomi.XPath.Series)))?.ToLowerInvariant(),
-                Characters = root.SelectNodes(Hitomi.XPath.Characters)?.Select(n => Sanitize(n)?.ToLowerInvariant()),
-                Tags = root.SelectNodes(Hitomi.XPath.Tags)
-                          ?.Select(n => ConvertTag(Sanitize(n)?.ToLowerInvariant()))
-            };
-
-            // parse images
+            // Fetch gallery info from JSON API
             using (var response = await _http.SendAsync(
                 new HttpRequestMessage
                 {
@@ -163,46 +70,157 @@ namespace nhitomi.Core.Clients.Hitomi
                 if (!response.IsSuccessStatusCode)
                     return null;
 
-                using (var textReader = new StringReader(await response.Content.ReadAsStringAsync()))
+                var content = await response.Content.ReadAsStringAsync();
+
+                // The response is JavaScript: "var galleryinfo = {...}"
+                // We need to strip the prefix to get the JSON
+                var jsonStart = content.IndexOf('{');
+                if (jsonStart == -1)
+                    return null;
+
+                var jsonContent = content.Substring(jsonStart);
+
+                GalleryInfo gallery;
+                using (var textReader = new StringReader(jsonContent))
                 using (var jsonReader = new JsonTextReader(textReader))
                 {
-                    // discard javascript bit and start at json
-                    while ((char) textReader.Peek() != '[')
-                        textReader.Read();
+                    gallery = _serializer.Deserialize<GalleryInfo>(jsonReader);
+                }
 
-                    var images = _serializer.Deserialize<ImageInfo[]>(jsonReader);
+                if (gallery == null)
+                    return null;
 
-                    var extensionsCombined =
-                        new string(images.Select(i =>
-                                          {
-                                              var ext = Path.GetExtension(i.Name);
+                // Filter out anime
+                if (gallery.Type != null && gallery.Type.Equals("anime", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation($"Skipping '{id}' because it is of type 'anime'.");
+                    return null;
+                }
 
-                                              switch (ext)
-                                              {
-                                                  case "":      return '.';
-                                                  case ".jpg":  return 'j';
-                                                  case ".jpeg": return 'J';
-                                                  case ".png":  return 'p';
-                                                  case ".gif":  return 'g';
-                                                  default:
+                // Parse names
+                var prettyName = gallery.Title ?? "";
+                var originalName = gallery.JapaneseTitle ?? prettyName;
 
-                                                      throw new NotSupportedException(
-                                                          $"Unknown image format '{ext}'.");
-                                              }
-                                          })
-                                         .ToArray());
+                // Replace stuff in brackets with nothing
+                prettyName = _bracketsRegex.Replace(prettyName, "").Trim();
 
-                    doujin.PageCount = images.Length;
+                if (string.IsNullOrEmpty(prettyName))
+                    prettyName = originalName;
 
+                // Parse names with two parts (separated by |)
+                var pipeIndex = prettyName.IndexOf('|');
+                if (pipeIndex != -1)
+                {
+                    var temp = prettyName;
+                    prettyName = temp.Substring(0, pipeIndex).Trim();
+                    originalName = temp.Substring(pipeIndex + 1).Trim();
+                }
+
+                // Parse upload time
+                DateTime uploadTime = DateTime.UtcNow;
+                if (!string.IsNullOrEmpty(gallery.Date))
+                {
+                    if (DateTime.TryParse(gallery.Date, out var parsed))
+                        uploadTime = parsed.ToUniversalTime();
+                }
+
+                // Build doujin info
+                var doujin = new DoujinInfo
+                {
+                    PrettyName   = prettyName,
+                    OriginalName = originalName,
+                    UploadTime   = uploadTime,
+                    Source       = this,
+                    SourceId     = id,
+
+                    Artist     = gallery.Artists?.FirstOrDefault()?.Name?.ToLowerInvariant(),
+                    Group      = gallery.Groups?.FirstOrDefault()?.Name?.ToLowerInvariant(),
+                    Language   = gallery.Language?.ToLowerInvariant(),
+                    Parody     = ConvertSeries(gallery.Parodys?.FirstOrDefault()?.Name)?.ToLowerInvariant(),
+                    Characters = gallery.Characters?.Select(c => c.Name?.ToLowerInvariant()).Where(n => n != null),
+                    Tags       = gallery.Tags?.Select(t => ConvertTag(t))?.Where(t => t != null)
+                };
+
+                // Parse images
+                if (gallery.Files != null && gallery.Files.Length > 0)
+                {
+                    var extensionsCombined = new string(gallery.Files.Select(i =>
+                    {
+                        var ext = Path.GetExtension(i.Name);
+                        switch (ext)
+                        {
+                            case "":      return '.';
+                            case ".jpg":  return 'j';
+                            case ".jpeg": return 'J';
+                            case ".png":  return 'p';
+                            case ".gif":  return 'g';
+                            case ".webp": return 'w';
+                            default:      return 'j'; // Default to jpg for unknown
+                        }
+                    }).ToArray());
+
+                    doujin.PageCount = gallery.Files.Length;
                     doujin.Data = _serializer.Serialize(new InternalDoujinData
                     {
-                        ImageNames = images.Select(i => Path.GetFileNameWithoutExtension(i.Name)).ToArray(),
+                        ImageNames = gallery.Files.Select(i => Path.GetFileNameWithoutExtension(i.Name)).ToArray(),
                         Extensions = extensionsCombined
                     });
                 }
-            }
 
-            return doujin;
+                return doujin;
+            }
+        }
+
+        // JSON model classes for the Hitomi API response
+        sealed class GalleryInfo
+        {
+            [JsonProperty("title")] public string Title;
+            [JsonProperty("japanese_title")] public string JapaneseTitle;
+            [JsonProperty("id")] public string Id;
+            [JsonProperty("language")] public string Language;
+            [JsonProperty("type")] public string Type;
+            [JsonProperty("date")] public string Date;
+            [JsonProperty("artists")] public ArtistInfo[] Artists;
+            [JsonProperty("groups")] public GroupInfo[] Groups;
+            [JsonProperty("characters")] public CharacterInfo[] Characters;
+            [JsonProperty("parodys")] public ParodyInfo[] Parodys;
+            [JsonProperty("tags")] public TagInfo[] Tags;
+            [JsonProperty("files")] public FileInfo[] Files;
+        }
+
+        sealed class ArtistInfo
+        {
+            [JsonProperty("artist")] public string Name;
+        }
+
+        sealed class GroupInfo
+        {
+            [JsonProperty("group")] public string Name;
+        }
+
+        sealed class CharacterInfo
+        {
+            [JsonProperty("character")] public string Name;
+        }
+
+        sealed class ParodyInfo
+        {
+            [JsonProperty("parody")] public string Name;
+        }
+
+        sealed class TagInfo
+        {
+            [JsonProperty("tag")] public string Name;
+            [JsonProperty("female")] public string Female;
+            [JsonProperty("male")] public string Male;
+        }
+
+        sealed class FileInfo
+        {
+            [JsonProperty("name")] public string Name;
+            [JsonProperty("width")] public int Width;
+            [JsonProperty("height")] public int Height;
+            [JsonProperty("hash")] public string Hash;
         }
 
         sealed class InternalDoujinData
@@ -214,30 +232,14 @@ namespace nhitomi.Core.Clients.Hitomi
         static string ConvertSeries(string series) =>
             series == null || series.Equals("original", StringComparison.OrdinalIgnoreCase) ? null : series;
 
-        static string ConvertTag(string tag) =>
-            tag.Contains(':') ? tag.Substring(tag.IndexOf(':') + 1) : tag.TrimEnd('♀', '♂', ' ');
-
-        static string Sanitize(HtmlNode node)
+        static string ConvertTag(TagInfo tag)
         {
-            if (node == null)
+            if (tag?.Name == null)
                 return null;
 
-            var text = HtmlEntity.DeEntitize(node.InnerText).Trim();
-
-            return string.IsNullOrEmpty(text) ? null : text;
-        }
-
-        struct ImageInfo
-        {
-            // 649 means field is never initialized
-            // they ARE initialized during json deserialization
-#pragma warning disable 649
-
-            [JsonProperty("name")] public string Name;
-            [JsonProperty("width")] public int Width;
-            [JsonProperty("height")] public int Height;
-
-#pragma warning restore 649
+            // Return just the tag name without gender prefix
+            // (matching original behavior)
+            return tag.Name.ToLowerInvariant();
         }
 
         async Task<int[]> ReadNozomiIndicesAsync(CancellationToken cancellationToken = default)
@@ -327,6 +329,9 @@ namespace nhitomi.Core.Clients.Hitomi
                         break;
                     case 'g':
                         extension = ".gif";
+                        break;
+                    case 'w':
+                        extension = ".webp";
                         break;
                     default:
                         extension = ".jpg";

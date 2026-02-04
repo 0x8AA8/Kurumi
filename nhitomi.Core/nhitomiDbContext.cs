@@ -410,9 +410,11 @@ ORDER BY d.`UploadTime` DESC");
         public async Task<Guild[]> GetGuildsAsync(ulong[] guildIds,
                                                   CancellationToken cancellationToken = default)
         {
+            // Convert to List to avoid EF Core parameterization issues with arrays
+            var guildIdList = guildIds.ToList();
             var guilds = await Query<Guild>()
                               .Include(g => g.FeedChannels)
-                              .Where(g => guildIds.Contains(g.Id))
+                              .Where(g => guildIdList.Contains(g.Id))
                               .ToListAsync(cancellationToken);
 
             // create entities for missing guilds
@@ -425,7 +427,7 @@ ORDER BY d.`UploadTime` DESC");
 
                 guilds.Add(guild);
 
-                Add(guilds);
+                Add(guild);
             }
 
             return guilds.ToArray();
